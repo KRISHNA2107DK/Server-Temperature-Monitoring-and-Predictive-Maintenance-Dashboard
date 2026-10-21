@@ -23,6 +23,7 @@ RESAMPLE_INTERVAL = "1min"      # raw samples are ~10 s apart; 1 min keeps the d
 ANOMALY_WINDOW = 60             # rolling window in 1-min samples (= 1 hour)
 ANOMALY_Z = 4.0                 # |value - rolling mean| > 4 rolling std devs => anomaly
 TREND_DAYS = 3                  # trend is fitted on each component's last 3 days of data
+MIN_TREND_SPAN_DAYS = 1.0       # ...and only if that data covers at least 1 day
 
 
 def server_ip_from_path(member_name):
@@ -125,8 +126,12 @@ def fit_trend(group):
     """Least-squares slope (°C/day) on the component's last TREND_DAYS of data, and days until 85 °C."""
     end = group["Timestamp"].max()
     recent = group[group["Timestamp"] >= end - pd.Timedelta(days=TREND_DAYS)]
-    if len(recent) < 30:
-        return pd.Series({"trend_c_per_day": float("nan"), "days_to_critical": float("nan")})
+    covered_days = (recent["Timestamp"].max() - recent["Timestamp"].min()) / pd.Timedelta(days=1)
+    if len(recent) < 30 or covered_days < MIN_TREND_SPAN_DAYS:
+        # Too little history to project days ahead (e.g. 1 hour of warm-up would give a huge fake slope).
+        already_critical = len(recent) > 0 and recent["temp_mean"].tail(30).mean() >= CRITICAL_TEMP_C
+        return pd.Series({"trend_c_per_day": float("nan"),
+                          "days_to_critical": 0.0 if already_critical else float("nan")})
     days = (recent["Timestamp"] - recent["Timestamp"].min()).dt.total_seconds() / 86400
     temps = recent["temp_mean"]
     slope = ((days - days.mean()) * (temps - temps.mean())).sum() / ((days - days.mean()) ** 2).sum()

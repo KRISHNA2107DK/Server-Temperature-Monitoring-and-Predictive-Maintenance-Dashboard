@@ -4,6 +4,7 @@ Every figure goes through style_figure(): white plot area, dark text, grid lines
 titled legend, so charts stay readable on the light-grey dashboard background and in PNG exports.
 Each component always gets the same colour in every chart (COMPONENT_COLORS).
 """
+import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -39,6 +40,31 @@ def present_components(frame):
     return [c for c in COMPONENT_ORDER if c in present]
 
 
+DISPLAY_RESOLUTIONS = {"1-minute": None, "5-minute": "5min", "15-minute": "15min", "1-hour": "1h"}
+MAX_LINE_POINTS = 120_000
+
+
+def average_into_blocks(frame, group_column, resolution):
+    """Average 1-minute rows into larger time blocks. temp_max keeps the block MAXIMUM, so a spike above
+    85 °C is never hidden by averaging."""
+    freq = DISPLAY_RESOLUTIONS[resolution]
+    if freq is None:
+        return frame
+    aggregations = {"temp_mean": "mean", "temp_max": "max", "rpm": "mean"}
+    return (frame.groupby([group_column, pd.Grouper(key="Timestamp", freq=freq)], observed=True)
+            .agg({c: f for c, f in aggregations.items() if c in frame.columns}).dropna().reset_index())
+
+
+def coarsen_for_display(frame, group_column):
+    """Line charts with hundreds of thousands of points are slow in a browser, so pick the finest
+    resolution that keeps the chart under MAX_LINE_POINTS. Returns (frame, resolution label)."""
+    for resolution in DISPLAY_RESOLUTIONS:
+        coarse = average_into_blocks(frame, group_column, resolution)
+        if len(coarse) <= MAX_LINE_POINTS:
+            break
+    return coarse, resolution
+
+
 def component_label(name):
     return f"{name} – {COMPONENT_GUIDE.get(name, 'sensor')}"
 
@@ -71,12 +97,12 @@ def add_threshold_lines(figure):
     return figure
 
 
-def trend_chart(server_minutes, server_name):
+def trend_chart(server_minutes, server_name, resolution="1-minute"):
     """Line chart of 1-minute mean temperature per component for one server, >85 °C points marked."""
     figure = px.line(server_minutes, x="Timestamp", y="temp_mean", color="component",
                      color_discrete_map=COMPONENT_COLORS,
                      category_orders={"component": COMPONENT_ORDER},
-                     title=f"Temperature trend — server {server_name}",
+                     title=f"Temperature trend — server {server_name} ({resolution} averages; ✕ = max above 85 °C)",
                      labels={"temp_mean": "Temperature (°C)", "Timestamp": "Time", "component": "Component"})
     figure.update_traces(line_width=1.6)
     hot = server_minutes[server_minutes["temp_max"] > CRITICAL_TEMP_C]
@@ -90,7 +116,7 @@ def trend_chart(server_minutes, server_name):
 
 def heatmap_chart(minutes):
     """Server x component grid coloured by peak temperature; every component is labelled."""
-    peak = minutes.pivot_table(index="server", columns="component", values="temp_max", aggfunc="max")
+    peak = minutes.pivot_table(index="server", columns="component", values="temp_max", aggfunc="max", observed=True)
     peak = peak[[c for c in COMPONENT_ORDER if c in peak.columns]]
     figure = px.imshow(peak, color_continuous_scale="RdYlGn_r", zmin=20, zmax=100, text_auto=".0f",
                        aspect="auto", title="Peak temperature (°C) by server and component",
@@ -104,8 +130,8 @@ def heatmap_chart(minutes):
 
 def max_temp_bar_chart(minutes, top_n=40):
     """Peak temperature of the hottest server-component pairs, coloured by threshold status."""
-    peak = minutes.groupby(["server", "component"])["temp_max"].max().reset_index()
-    peak["label"] = peak["server"] + " · " + peak["component"]
+    peak = minutes.groupby(["server", "component"], observed=True)["temp_max"].max().reset_index()
+    peak["label"] = peak["server"].astype(str) + " · " + peak["component"].astype(str)
     peak["status"] = peak["temp_max"].apply(
         lambda t: "Critical (>85 °C)" if t > CRITICAL_TEMP_C
         else ("Warning (80–85 °C)" if t >= WARNING_TEMP_C else "Normal (<80 °C)"))
@@ -120,26 +146,59 @@ def max_temp_bar_chart(minutes, top_n=40):
     return style_figure(add_threshold_lines(figure), height=560, legend_title="Status")
 
 
+def box_statistics(values):
+    """Exact box-plot numbers for one group. Whiskers = most extreme values within 1.5 x IQR of the box.
+    Computing these here (instead of sending millions of points to the browser) keeps charts fast."""
+    q1, median, q3 = values.quantile([0.25, 0.5, 0.75]).tolist()
+    iqr = q3 - q1
+    inside = values[(values >= q1 - 1.5 * iqr) & (values <= q3 + 1.5 * iqr)]
+    return dict(q1=q1, median=median, q3=q3, lowerfence=inside.min(), upperfence=inside.max())
+
+
+def add_box(figure, values, name, x_label, color, show_legend=True, legend_group=None):
+    stats = box_statistics(values.astype("float64"))
+    figure.add_trace(go.Box(x=[x_label], q1=[stats["q1"]], median=[stats["median"]], q3=[stats["q3"]],
+                            lowerfence=[stats["lowerfence"]], upperfence=[stats["upperfence"]],
+                            name=name, marker_color=color, line=dict(color=color, width=1.5),
+                            fillcolor=color, opacity=0.75, showlegend=show_legend,
+                            legendgroup=legend_group or name, offsetgroup=legend_group or name))
+
+
+def without_sensor_off(minutes):
+    """Readings of exactly 0 °C come from boards that are switched off / disconnected (a powered chip cannot be
+    at 0 °C in a lab). They are left out of distribution charts only, so they do not distort the boxes."""
+    return minutes[minutes["temp_mean"] != 0]
+
+
 def distribution_box_chart(minutes):
-    """Box plot of temperature distribution for each component type."""
-    present = present_components(minutes)
-    figure = px.box(minutes, x="component", y="temp_mean", color="component", points=False,
-                    color_discrete_map=COMPONENT_COLORS, category_orders={"component": present},
-                    title="Temperature distribution by component (all selected servers)",
-                    labels={"temp_mean": "Temperature (°C)", "component": "Component"})
+    """Box plot of temperature distribution for each component type (all selected servers)."""
+    minutes = without_sensor_off(minutes)
+    figure = go.Figure()
+    for component in present_components(minutes):
+        add_box(figure, minutes.loc[minutes["component"] == component, "temp_mean"], component, component,
+                COMPONENT_COLORS[component])
+    figure.update_layout(title="Temperature distribution by component (all selected servers; 0 °C sensor-off readings excluded)",
+                         xaxis_title="Component", yaxis_title="Temperature (°C)")
     figure.update_xaxes(tickangle=-45)
     return style_figure(add_threshold_lines(figure), height=520, legend_title="Component")
 
 
 def status_box_chart(minutes):
     """Active vs idle temperature per component: shows how much workload heats each part."""
-    data = minutes[minutes["status"].isin(["active", "idle"])]
-    present = present_components(data)
-    figure = px.box(data, x="component", y="temp_mean", color="status", points=False,
-                    color_discrete_map={"active": "#C62828", "idle": "#1565C0"},
-                    category_orders={"component": present, "status": ["active", "idle"]},
-                    title="Temperature under load (active) vs idle, per component",
-                    labels={"temp_mean": "Temperature (°C)", "component": "Component", "status": "Server status"})
+    status_colors = {"active": "#C62828", "idle": "#1565C0"}
+    minutes = without_sensor_off(minutes)
+    figure = go.Figure()
+    in_legend = set()
+    for component in present_components(minutes):
+        part = minutes[minutes["component"] == component]
+        for status, color in status_colors.items():
+            values = part.loc[part["status"] == status, "temp_mean"]
+            if len(values):
+                add_box(figure, values, status, component, color, show_legend=status not in in_legend,
+                        legend_group=status)
+                in_legend.add(status)
+    figure.update_layout(title="Temperature under load (active) vs idle, per component (0 °C sensor-off readings excluded)", boxmode="group",
+                         xaxis_title="Component", yaxis_title="Temperature (°C)")
     figure.update_xaxes(tickangle=-45)
     return style_figure(add_threshold_lines(figure), height=520, legend_title="Server status")
 
@@ -164,7 +223,7 @@ def risk_level_chart(component_summary):
     return style_figure(figure, height=420, legend_title="Risk level")
 
 
-def fan_temperature_chart(server_fans, server_minutes, server_name):
+def fan_temperature_chart(server_fans, server_minutes, server_name, resolution="1-minute"):
     """Two stacked panels sharing the time axis: key temperatures on top, fan speeds below.
     A fan dropping to 0 rpm while temperatures climb points to a cooling failure."""
     figure = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.08,
@@ -176,13 +235,13 @@ def fan_temperature_chart(server_fans, server_minutes, server_name):
                                         line=dict(color=COMPONENT_COLORS[component], width=1.5),
                                         legendgroup="temps", legendgrouptitle_text="Temperature"), row=1, col=1)
     fan_palette = px.colors.qualitative.Bold
-    for i, (fan, part) in enumerate(server_fans.groupby("fan")):
+    for i, (fan, part) in enumerate(server_fans.groupby("fan", observed=True)):
         figure.add_trace(go.Scatter(x=part["Timestamp"], y=part["rpm"], name=fan,
                                     line=dict(color=fan_palette[i % len(fan_palette)], width=1.5),
                                     legendgroup="fans", legendgrouptitle_text="Fan"), row=2, col=1)
     figure.add_hline(y=CRITICAL_TEMP_C, line_dash="dash", line_color="#C62828", row=1, col=1,
                      annotation_text="Critical 85 °C", annotation_font_color="#C62828")
-    figure.update_layout(title=f"Cooling check — server {server_name}", hovermode="x unified")
+    figure.update_layout(title=f"Cooling check — server {server_name} ({resolution} averages)", hovermode="x unified")
     figure.update_yaxes(title_text="°C", row=1, col=1)
     figure.update_yaxes(title_text="rpm", row=2, col=1)
     return style_figure(figure, height=700, legend_title=None)

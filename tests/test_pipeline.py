@@ -12,6 +12,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 import pipeline  # noqa: E402
+import charts  # noqa: E402
 
 HEADER = ("Timestamp,STATUS,SDR0-FPGA(°C),CPU-TEMP(°C),FAN-1(rpm)\n")
 
@@ -95,6 +96,13 @@ def test_trend_projects_days_to_critical():
     assert result["days_to_critical"] == pytest.approx((85 - 76) / 2.0, abs=0.1)
 
 
+def test_no_trend_projection_from_less_than_one_day():
+    times = pd.date_range("2025-01-01", periods=68, freq="1min")  # 68 minutes of fast warm-up
+    warming = pd.DataFrame({"Timestamp": times, "temp_mean": [25 + 0.3 * i for i in range(68)]})
+    result = pipeline.fit_trend(warming)
+    assert pd.isna(result["trend_c_per_day"]) and pd.isna(result["days_to_critical"])
+
+
 @pytest.mark.parametrize("row, expected", [
     (dict(last_temp_c=90, pct_time_above_85=0.5, readings_above_85=5, days_to_critical=float("nan"),
           max_temp_c=95, anomaly_minutes=0), "CRITICAL"),
@@ -120,3 +128,19 @@ def test_anomaly_flags_sudden_jump():
     scored = pipeline.detect_anomalies(frame)
     assert scored["is_anomaly"].sum() == 1
     assert scored.loc[scored["is_anomaly"], "Timestamp"].iloc[0] == times[100]
+
+
+def test_box_statistics_match_definition():
+    values = pd.Series([1.0, 2, 3, 4, 5, 6, 7, 8, 9, 100])  # 100 is an outlier beyond 1.5 x IQR
+    stats = charts.box_statistics(values)
+    assert stats["median"] == 5.5
+    assert stats["q1"] == pytest.approx(3.25) and stats["q3"] == pytest.approx(7.75)
+    assert stats["lowerfence"] == 1 and stats["upperfence"] == 9
+
+
+def test_display_blocks_keep_the_maximum():
+    times = pd.date_range("2025-01-01", periods=10, freq="1min")
+    frame = pd.DataFrame({"component": "c", "Timestamp": times, "temp_mean": 50.0,
+                          "temp_max": [50.0] * 9 + [90.0]})
+    blocks = charts.average_into_blocks(frame, "component", "5-minute")
+    assert len(blocks) == 2 and blocks["temp_max"].max() == 90.0

@@ -32,21 +32,19 @@ def main():
     minutes = pd.read_parquet(PROCESSED_DIR / "minute_temperatures.parquet")
     fans = pd.read_parquet(PROCESSED_DIR / "minute_fans.parquet")
     components = pd.read_csv(PROJECT_DIR / "results" / "tables" / "component_risk_summary.csv")
-    # Box plots are drawn from a fixed random sample (seed 0) of 1-minute rows to keep files small.
-    sample = minutes.sample(min(len(minutes), 200_000), random_state=0)
 
     save(max_temp_bar_chart(minutes), "01_hottest_components")
     save(heatmap_chart(minutes), "02_peak_heatmap")
-    save(distribution_box_chart(sample), "03_distribution_by_component")
-    save(status_box_chart(sample), "04_active_vs_idle")
+    save(distribution_box_chart(minutes), "03_distribution_by_component")
+    save(status_box_chart(minutes), "04_active_vs_idle")
     save(anomaly_scatter_chart(minutes[minutes["is_anomaly"]]), "05_anomalies")
     save(risk_level_chart(components), "06_risk_levels")
     for server, server_minutes in minutes.groupby("server"):
         safe_name = server.replace(".", "_")
         coarse = ten_minute_average(server_minutes, "component", ["temp_mean", "temp_max"])
-        save(trend_chart(coarse, server), f"trend_{safe_name}")
+        save(trend_chart(coarse, server, "10-minute"), f"trend_{safe_name}")
         coarse_fans = ten_minute_average(fans[fans["server"] == server], "fan", ["rpm"])
-        save(fan_temperature_chart(coarse_fans, coarse, server), f"cooling_{safe_name}")
+        save(fan_temperature_chart(coarse_fans, coarse, server, "10-minute"), f"cooling_{safe_name}")
     print("Charts written to", CHARTS_DIR)
 
 

@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Final Report – Server Temperature Monitoring and Predictive Maintenance Dashboard</title>
+<style>
+  @page { size: A4; margin: 16mm 15mm 16mm 15mm; }
+  body { font-family: "Segoe UI", Arial, sans-serif; color: #111827; font-size: 10.5pt; line-height: 1.5; margin: 0; }
+  h1 { font-size: 21pt; margin: 0 0 4px; line-height: 1.2; }
+  h2 { font-size: 14pt; color: #7f1d1d; border-bottom: 2px solid #C62828; padding-bottom: 3px; margin: 22px 0 8px; page-break-after: avoid; }
+  h3 { font-size: 11.5pt; margin: 14px 0 4px; page-break-after: avoid; }
+  p { margin: 4px 0 8px; }
+  ul, ol { margin: 4px 0 8px 0; padding-left: 20px; }
+  li { margin-bottom: 3px; }
+  table { border-collapse: collapse; width: 100%; margin: 6px 0 10px; font-size: 9.3pt; page-break-inside: auto; }
+  tr { page-break-inside: avoid; }
+  th, td { border: 1px solid #9ca3af; padding: 4px 6px; text-align: left; vertical-align: top; }
+  th { background: #f3f4f6; }
+  code { font-family: Consolas, monospace; font-size: 9pt; background: #f3f4f6; padding: 0 3px; border-radius: 3px; }
+  pre { font-family: Consolas, monospace; font-size: 9pt; background: #f3f4f6; border: 1px solid #d1d5db; padding: 8px; white-space: pre-wrap; margin: 4px 0 10px; }
+  a { color: #1d4ed8; }
+  .cover { border: 2px solid #C62828; border-radius: 8px; padding: 18px 20px; margin-bottom: 14px; }
+  .meta td { border: none; padding: 2px 8px 2px 0; font-size: 10.5pt; }
+  .meta td:first-child { font-weight: 600; width: 155px; }
+  .links { background: #fef2f2; border: 1px solid #fca5a5; border-radius: 6px; padding: 10px 12px; margin: 10px 0 4px; }
+  .note { background: #eff6ff; border-left: 4px solid #1d4ed8; padding: 6px 10px; margin: 8px 0; }
+  .warn { background: #fff7ed; border-left: 4px solid #EF6C00; padding: 6px 10px; margin: 8px 0; }
+  .ok { color: #166534; font-weight: 600; }
+  figure { margin: 8px 0 14px; page-break-inside: avoid; text-align: center; }
+  figure img { max-width: 100%; border: 1px solid #9ca3af; }
+  figcaption { font-size: 9pt; color: #374151; margin-top: 3px; }
+  .crit { background: #C62828; color: #fff; font-weight: 600; }
+  .high { background: #EF6C00; color: #fff; font-weight: 600; }
+  .warnc { background: #F9A825; font-weight: 600; }
+  .norm { background: #2E7D32; color: #fff; font-weight: 600; }
+  .pb { page-break-before: always; }
+  .small { font-size: 9pt; color: #374151; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <h1>Server Temperature Monitoring and Predictive Maintenance Dashboard</h1>
+  <p class="small">Final project report</p>
+  <table class="meta">
+    <tr><td>Name</td><td>Dharmapuri Srikrishna Ashrit</td></tr>
+    <tr><td>Registration number</td><td>235890216</td></tr>
+    <tr><td>Institution</td><td>Manipal Institute of Technology, Bengaluru</td></tr>
+    <tr><td>Date</td><td>21 October 2026</td></tr>
+  </table>
+  <div class="links">
+    <b>Live dashboard:</b> <a href="https://server-temp-monitor.streamlit.app/">https://server-temp-monitor.streamlit.app/</a><br>
+    <b>Source code (GitHub):</b> <a href="https://github.com/KRISHNA2107DK/Server-Temperature-Monitoring-and-Predictive-Maintenance-Dashboard">https://github.com/KRISHNA2107DK/Server-Temperature-Monitoring-and-Predictive-Maintenance-Dashboard</a>
+  </div>
+  <p class="small">The live dashboard is hosted on Streamlit Community Cloud (free tier). If the app has been idle, it may show a "wake up" button. Click it and wait about a minute for it to start.</p>
+</div>
+
+<h2>Contents</h2>
+<ol>
+  <li>Summary</li>
+  <li>Problem statement and intended users</li>
+  <li>Requirements and how each one is met</li>
+  <li>The dataset</li>
+  <li>Solution design and technology choices</li>
+  <li>Data processing: step by step</li>
+  <li>Analysis methods: overheating, abnormal patterns, prediction, risk levels</li>
+  <li>The dashboard: page-by-page guide</li>
+  <li>Key findings from the data</li>
+  <li>Testing and verification</li>
+  <li>Assumptions, limitations and data-quality notes</li>
+  <li>How to reproduce the results</li>
+  <li>Project files and deliverables</li>
+  <li>Conclusion</li>
+</ol>
+
+<h2>1. Summary</h2>
+<p>I built an interactive web dashboard that reads the real temperature logs collected from <b>14 laboratory servers</b> and checks every hardware component against the <b>critical limit of 85 °C</b> given in the problem statement. The dashboard answers four questions:</p>
+<ol>
+  <li><b>Which components are overheating?</b> Every reading above 85 °C is counted, grouped into overheating events and shown in red.</li>
+  <li><b>How are temperatures changing over time?</b> Time-series charts for every component of every server.</li>
+  <li><b>Is anything behaving abnormally?</b> Sudden jumps or drops in temperature are detected automatically, even when they stay below 85 °C.</li>
+  <li><b>What should be fixed first?</b> Every component gets a maintenance risk level (Critical, High, Warning or Normal), based on its past overheating, abnormal behaviour and current temperature trend.</li>
+</ol>
+<p>The whole analysis was run on the full dataset: <b>1,376,036 time-stamped readings</b>, which contain <b>14,234,677 individual component temperatures</b>. All numbers in this report come from that run. None are estimated or invented.</p>
+
+<h2>2. Problem statement and intended users</h2>
+<p><b>Problem (in plain words):</b> The lab's servers log the temperature of each of their hardware components roughly every 10 seconds. If any component goes above 85 °C, it may be developing a hardware fault, and the server may go down. Looking through tens of thousands of raw log files by hand is not practical. The lab needs one place where it can see the temperatures visually, spot overheating parts, follow trends, notice unusual behaviour and plan maintenance <i>before</i> a failure happens.</p>
+<p><b>Intended users:</b> lab engineers, system administrators and maintenance staff who look after the servers.</p>
+<p><b>Typical workflow:</b></p>
+<ol>
+  <li>Open the dashboard link.</li>
+  <li>The <b>Overview</b> page immediately lists every component that went above 85 °C.</li>
+  <li>Pick a server on <b>Temperature trends</b> to see when and how often it overheated.</li>
+  <li>Check <b>Abnormal patterns</b> for sudden temperature jumps.</li>
+  <li>Use <b>Predictive maintenance</b> to see the ranked list of components to inspect first.</li>
+  <li>Use <b>Cooling &amp; workload</b> to see whether fans or workload explain the heat.</li>
+  <li>Download any table as CSV for a maintenance ticket.</li>
+</ol>
+<p><b>Example:</b> the raw log line <code>2025-04-27 00:00:13, active, SDR0-FPGA = 56 °C, …</code> from server 172.27.186.134 appears on the trend chart as 56 °C for SDR0-FPGA, which is normal (below 80 °C). A reading of 87 °C would appear as a red ✕ above the dashed 85 °C line. It would be counted in "Minutes above 85 °C" and listed as a breach event, and the component would be rated High or Critical.</p>
+
+<h2>3. Requirements and how each one is met</h2>
+<p>Every requirement below comes directly from the wording of the problem statement. None was dropped or weakened.</p>
+<table>
+  <tr><th style="width:4%">#</th><th style="width:27%">Requirement (problem statement wording)</th><th>How it is met</th><th style="width:20%">Where to see it</th></tr>
+  <tr><td>1</td><td>Readings from <i>multiple servers</i>, each with <i>multiple components</i></td><td>All 14 servers and all 17 temperature sensor types in the zip file are loaded automatically. Nothing is hard-coded.</td><td>Overview: Servers = 14, Server-components = 179</td></tr>
+  <tr><td>2</td><td>Critical threshold of <i>85 °C for any component</i></td><td>The same 85 °C rule is applied to every component. "Exceeding" means strictly above 85 °C. Every temperature chart shows a red dashed 85 °C line.</td><td>All charts; <code>critical_breach_events.csv</code></td></tr>
+  <tr><td>3</td><td><i>Interactive</i> dashboard</td><td>A web dashboard with a top navigation bar and a filter bar (servers, components, active/idle status, date range). Charts can be zoomed and hovered for exact values, and legend entries can be clicked to hide or show lines.</td><td>Whole dashboard</td></tr>
+  <tr><td>4</td><td><i>Multiple graphical formats</i></td><td>Seven chart types: bar chart, heatmap, line chart (with time slider), box plot, grouped box plot, scatter plot, and a two-panel temperature-plus-fan chart. KPI cards and colour-coded tables add to these.</td><td>All pages</td></tr>
+  <tr><td>5</td><td><i>Identify overheating components</i></td><td>A red alert box names every server-component above 85 °C with its peak. The bar chart colours them red. A table lists every overheating event with start, end, duration and peak.</td><td>Overview; Abnormal patterns</td></tr>
+  <tr><td>6</td><td><i>Monitor temperature trends</i></td><td>A time-series line for each component of the chosen server. Minutes above 85 °C are marked, and a range slider allows zooming into any period.</td><td>Temperature trends</td></tr>
+  <tr><td>7</td><td><i>Detect abnormal patterns</i></td><td>An automatic statistical check flags any minute that differs sharply from the same component's previous hour (Section 7.2).</td><td>Abnormal patterns</td></tr>
+  <tr><td>8</td><td><i>Proactively address potential hardware failures</i> (predictive maintenance)</td><td>A trend line is fitted to each component's recent data to project how many days remain until it reaches 85 °C. This is combined with past overheating and abnormal behaviour into four risk levels, with a "fix these first" list.</td><td>Predictive maintenance</td></tr>
+</table>
+
+<h2>4. The dataset</h2>
+<table>
+  <tr><th style="width:32%">Item</th><th>Details (checked by reading the files)</th></tr>
+  <tr><td>Source file</td><td><code>Tempreture Data.zip</code> (47 MB compressed, 209 MB uncompressed), provided with the assignment</td></tr>
+  <tr><td>Structure</td><td><code>30th_April/&lt;server-IP&gt;_info/heat-monitor-logs/heat-monitor_&lt;date&gt;.csv</code>, one folder per server</td></tr>
+  <tr><td>Servers</td><td>14 (IP addresses 172.27.x.x)</td></tr>
+  <tr><td>CSV files</td><td>65,990 files: <b>131 contain readings</b>, 65,857 contain only the header row, 2 are completely empty. Empty and header-only files are skipped.</td></tr>
+  <tr><td>Columns (same in every file)</td><td><code>Timestamp</code>, <code>STATUS</code> (active/idle), 16 SDR board sensors (<code>SDR0–7-FPGA</code>, <code>SDR0–7-RFIC</code>), <code>CPU-TEMP</code>, <code>CPUTIN</code>, <code>AUXTIN0–3</code>, <code>SYSTIN</code> (all in °C), and <code>FAN-1…7</code> (in rpm)</td></tr>
+  <tr><td>Missing sensors</td><td>Shown as "-" in the logs. They are treated as "sensor not present", not as zero.</td></tr>
+  <tr><td>Sampling</td><td>About one row every 10 seconds per server</td></tr>
+  <tr><td>Time span</td><td>Mostly 19 March 2025 to 30 April 2025. Server 172.27.186.50 also has 11,627 minutes dated 2–3 March 2023, most likely because that server's clock was wrong. These rows are kept and shown exactly as logged.</td></tr>
+  <tr><td>Size after loading</td><td>1,376,036 rows → 14,234,677 valid component temperatures → 3,185,417 one-minute summaries</td></tr>
+  <tr><td>Other files</td><td><code>system_ip_info.txt</code> and <code>error_log.txt</code> (hardware descriptions and setup errors). These are not temperature data, so they are not used.</td></tr>
+</table>
+<p>The 17 temperature sensors found in the data, and what they measure:</p>
+<table>
+  <tr><th style="width:22%">Sensor</th><th>Meaning</th></tr>
+  <tr><td>SDR0-FPGA … SDR4-FPGA</td><td>FPGA chip on software-defined-radio (SDR) board 0–4</td></tr>
+  <tr><td>SDR0-RFIC … SDR4-RFIC</td><td>RF integrated circuit (radio front-end chip) on SDR board 0–4</td></tr>
+  <tr><td>CPU-TEMP</td><td>Processor (CPU) die temperature</td></tr>
+  <tr><td>CPUTIN</td><td>CPU socket temperature, read by the motherboard sensor chip</td></tr>
+  <tr><td>SYSTIN</td><td>System / motherboard temperature</td></tr>
+  <tr><td>AUXTIN0 … AUXTIN3</td><td>Auxiliary motherboard sensors (e.g. voltage regulator or chipset area). Their exact location depends on the motherboard model, so this is an assumption.</td></tr>
+</table>
+<p class="small">SDR5–SDR7 columns exist in the files but contain no readings ("-") on any server, so they do not appear in the results.</p>
+
+<h2>5. Solution design and technology choices</h2>
+<h3>5.1 Overall design</h3>
+<p>The project has two simple stages:</p>
+<pre>Tempreture Data.zip
+      │  (1) src/pipeline.py — read, clean, summarise, detect, score   [run once, ~4 min]
+      ▼
+data/processed/*.parquet  +  results/tables/*.csv
+      │  (2) src/dashboard.py — interactive web dashboard (Streamlit)
+      ▼
+Browser: https://server-temp-monitor.streamlit.app/</pre>
+<p><b>Why two stages?</b> Reading 65,990 files and 14 million temperatures takes about four minutes and over 3 GB of memory. That is too slow and too large to repeat every time someone opens the dashboard. So the heavy work is done once, and the dashboard opens the small, pre-processed result files (about 31 MB) in seconds.</p>
+
+<h3>5.2 Options compared</h3>
+<table>
+  <tr><th>Criterion</th><th>Python + Streamlit + Plotly <b>(chosen)</b></th><th>Python + Plotly Dash</th><th>Power BI / Grafana</th></tr>
+  <tr><td>Meets all requirements</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
+  <tr><td>Easy to understand and explain</td><td>High: plain Python, about 760 lines of application code</td><td>Medium: needs callback code for every interaction</td><td>Low: logic hidden in a GUI tool</td></tr>
+  <tr><td>Setup effort</td><td>One <code>pip install</code> command</td><td>Same</td><td>Separate installers; Grafana also needs a database</td></tr>
+  <tr><td>Cost / accounts</td><td>Free; free public hosting on Streamlit Community Cloud</td><td>Free; hosting needs your own server</td><td>Power BI sharing needs a paid licence; Grafana needs a server</td></tr>
+  <tr><td>Reproducible from source code</td><td>Yes, everything is in the GitHub repository</td><td>Yes</td><td>Partly (binary report files)</td></tr>
+</table>
+
+<h3>5.3 What each component does, and why it was chosen</h3>
+<table>
+  <tr><th style="width:20%">Component</th><th>Responsibility</th><th style="width:34%">Why it was chosen</th></tr>
+  <tr><td>Python 3.11</td><td>Programming language for everything</td><td>Standard for data analysis; already installed</td></tr>
+  <tr><td>pandas</td><td>Reading CSVs, cleaning, one-minute summaries, statistics</td><td>The standard table-processing library</td></tr>
+  <tr><td>pyarrow (Parquet files)</td><td>Saves the processed data in a compact, fast format</td><td>31 MB instead of hundreds of MB of CSV; loads in about 1 second</td></tr>
+  <tr><td>Plotly</td><td>All interactive charts (zoom, hover, legend toggle)</td><td>Interactive by default; the same chart code is used in the dashboard and for export</td></tr>
+  <tr><td>Streamlit</td><td>The web dashboard: navigation, filters, tables, downloads</td><td>A full web app in pure Python, with free one-click hosting</td></tr>
+  <tr><td>kaleido</td><td>Saves charts as PNG images for reports</td><td>Plotly's official image exporter</td></tr>
+  <tr><td>pytest</td><td>Automatic unit tests</td><td>The standard Python testing tool</td></tr>
+  <tr><td>GitHub + Streamlit Community Cloud</td><td>Code hosting and public deployment</td><td>Free, with no API keys or secrets needed</td></tr>
+</table>
+<p><b>Not used, on purpose:</b> no database (files are enough for a fixed dataset), no machine-learning model (there are no records of actual hardware failures to train one honestly; see Section 7.3), and no paid services or API keys.</p>
+
+<h2>6. Data processing: step by step</h2>
+<p>All steps are in <code>src/pipeline.py</code>. Each step is listed with the decision made and the reason for it.</p>
+<table>
+  <tr><th style="width:4%">#</th><th style="width:30%">Step</th><th>Decision and reason</th></tr>
+  <tr><td>1</td><td>Read the CSVs directly from the zip</td><td>No manual extraction is needed, so the result is always produced from the original file. Files smaller than 500 bytes (header only) are skipped because they contain no readings.</td></tr>
+  <tr><td>2</td><td>Take the server name from the folder</td><td><code>172_27_186_13_info</code> becomes <code>172.27.186.13</code>, so every reading is tied to the correct server.</td></tr>
+  <tr><td>3</td><td>Clean column names</td><td><code>SDR0-FPGA(°C)</code> becomes <code>SDR0-FPGA</code>. The files use an older text encoding (Latin-1) for the degree sign, so they are read with that encoding to avoid errors.</td></tr>
+  <tr><td>4</td><td>Treat "-" as missing</td><td>A "-" means the sensor is not fitted. Counting it as 0 °C would be wrong.</td></tr>
+  <tr><td>5</td><td>Remove duplicate rows</td><td>The same server and timestamp appearing twice (overlapping log files) is kept once.</td></tr>
+  <tr><td>6</td><td>Remove impossible values</td><td>Values below −20 °C or above 150 °C are treated as sensor glitches and excluded. This does not affect the 85 °C analysis because the limits are far outside the real range.</td></tr>
+  <tr><td>7</td><td>Separate fans from temperatures</td><td>Fan columns are in rpm, not °C, so they are kept out of the temperature analysis and shown separately on the Cooling page.</td></tr>
+  <tr><td>8</td><td>Summarise to one row per minute, keeping both the <b>average</b> and the <b>maximum</b></td><td>Fourteen million points are too many for a browser. Keeping the maximum as well as the average means a short spike above 85 °C can never be hidden by averaging.</td></tr>
+  <tr><td>9</td><td>Attach server status per minute</td><td>The last <code>STATUS</code> (active/idle) logged in each minute is attached, so temperatures under load can be compared with idle temperatures.</td></tr>
+  <tr><td>10</td><td>Run the analysis (Section 7)</td><td>Overheating events, abnormal minutes, trend, risk level.</td></tr>
+  <tr><td>11</td><td>Save outputs</td><td>Processed data goes to <code>data/processed/</code>, result tables to <code>results/tables/</code> and the run log to <code>results/pipeline_log.txt</code>.</td></tr>
+</table>
+<div class="note"><b>Important:</b> the overheating counts in the result tables and in the risk levels use the <b>original ~10-second readings</b>, not the one-minute summaries, so nothing is lost to averaging. The dashboard's "Minutes above 85 °C" counts minutes whose <i>maximum</i> reading was above 85 °C.</div>
+
+<h2>7. Analysis methods</h2>
+<h3>7.1 Overheating (critical breaches)</h3>
+<ul>
+  <li>A reading is <b>critical</b> if it is <b>strictly greater than 85 °C</b>. A reading of exactly 85 °C is not counted, because the problem statement says "exceeding".</li>
+  <li>Back-to-back critical readings of the same component form one <b>overheating event</b>. A gap of more than 5 minutes starts a new event. Each event records its start, end, duration, peak temperature and number of readings.</li>
+  <li>An 80–85 °C <b>warning band</b> is shown as an early alert. This band is my own assumption; only 85 °C is given in the brief.</li>
+</ul>
+<h3>7.2 Abnormal patterns (anomaly detection)</h3>
+<ul>
+  <li>For each component, the average and spread (standard deviation) of its <b>previous 60 minutes</b> are calculated.</li>
+  <li>A minute is <b>abnormal</b> if it is more than <b>4 standard deviations</b> away from that previous-hour average (a "rolling z-score" above 4).</li>
+  <li>In simple words: a temperature that suddenly jumps or drops far more than it normally moves is flagged, even if it is still below 85 °C. This can reveal a failing fan, a sensor fault or a sudden workload change early.</li>
+  <li>The spread has a minimum of 0.5 °C, so that a sensor that is almost perfectly flat does not get flagged for tiny 0.1 °C changes.</li>
+  <li>The threshold of 4 was chosen to keep false alarms low. It is a setting in the code (<code>ANOMALY_Z</code>) and can be changed.</li>
+</ul>
+<h3>7.3 Prediction (temperature trend)</h3>
+<ul>
+  <li>For each component, a straight trend line is fitted to its <b>last 3 days of data</b> (least-squares linear regression). The slope gives the warming or cooling rate in <b>°C per day</b>.</li>
+  <li>If the component is warming, the line is extended to estimate <b>days until it reaches 85 °C</b>. If it is already above 85 °C, this is 0. If it is flat or cooling, no breach is projected.</li>
+  <li>A trend is only calculated when the recent data covers <b>at least one full day</b>. Projecting days ahead from a few minutes of warm-up data would give a meaningless result.</li>
+  <li><b>Why not machine learning?</b> The dataset has no record of real hardware failures, so there are no examples to train or test a failure-prediction model. A transparent trend line can be explained and checked by hand. A model that could not be validated would not be honest.</li>
+</ul>
+<h3>7.4 Maintenance risk level</h3>
+<p>The rules are checked in this order, and each component gets the first level that applies:</p>
+<table>
+  <tr><th style="width:14%">Level</th><th>Rule</th><th style="width:30%">Meaning for maintenance</th></tr>
+  <tr><td class="crit">CRITICAL</td><td>Latest temperature is above 85 °C, <b>or</b> at least 1% of all its readings were above 85 °C</td><td>Act now: overheating is ongoing or repeated</td></tr>
+  <tr><td class="high">HIGH</td><td>At least one reading above 85 °C, <b>or</b> the trend reaches 85 °C within 7 days</td><td>Plan an inspection soon</td></tr>
+  <tr><td class="warnc">WARNING</td><td>Peak of 80 °C or more, <b>or</b> at least one abnormal minute</td><td>Keep watching</td></tr>
+  <tr><td class="norm">NORMAL</td><td>None of the above</td><td>No action needed</td></tr>
+</table>
+
+<h2 class="pb">8. The dashboard: page-by-page guide</h2>
+<p><b>Layout:</b> a <b>navigation bar at the top</b> switches between six pages. Under the title, a <b>filter bar</b> (click to open) applies to every page: servers, components, server status (active/idle) and date range. Every chart sits on a white card with dark text and grid lines for high contrast. Legends sit in a grey box with a bold title. Each component keeps the same colour on every chart, and all charts are labelled with component names. The 85 °C line (red dashed) and 80 °C line (orange dotted) are drawn on every temperature chart.</p>
+<p><b>Interaction on every chart:</b> hover to see exact values, drag to zoom, double-click to reset, click a legend entry to hide or show it, and double-click a legend entry to show only that one.</p>
+
+<h3>8.1 Overview</h3>
+<ul>
+  <li><b>Five KPI cards:</b> number of servers, server-components monitored, peak temperature, minutes above 85 °C, abnormal minutes.</li>
+  <li><b>Red alert box</b> naming every server-component that exceeded 85 °C, with its peak temperature.</li>
+  <li><b>Bar chart:</b> the 40 hottest server-components, coloured red (critical), amber (warning) or green (normal).</li>
+  <li><b>Heatmap:</b> every server (rows) against every component (columns), coloured by peak temperature, with the value written in each cell.</li>
+  <li><b>Server summary table</b> with a CSV download button.</li>
+</ul>
+<figure><img src="screenshots/01_overview.png"><figcaption>Figure 1 – Overview page (screenshot of the running dashboard, all filters at default)</figcaption></figure>
+
+<h3>8.2 Temperature trends</h3>
+<ul>
+  <li>Choose a server and its components. A <b>line chart</b> shows each component over time, with a range slider to zoom into any period. Readings above 85 °C are marked with red ✕.</li>
+  <li>To keep the browser fast, a very large selection is shown in 5-minute (or longer) averages. The chart title states the resolution. Each block keeps its <b>maximum</b>, so a spike above 85 °C is still marked.</li>
+  <li>A <b>box plot</b> shows the typical range of each component type. The box covers the middle 50% of readings, the line inside it is the median, and the whiskers reach the most extreme readings within 1.5 × the box height. Readings of exactly 0 °C (boards switched off) are left out of this chart only.</li>
+</ul>
+<figure><img src="screenshots/02_trends.png"><figcaption>Figure 2 – Temperature trends page</figcaption></figure>
+
+<h3>8.3 Abnormal patterns</h3>
+<ul>
+  <li>A plain-language explanation of the anomaly rule.</li>
+  <li>A <b>scatter plot</b> of every abnormal minute (colour = component, marker shape = server).</li>
+  <li>A table of abnormal-minute counts per server-component, and the full table of <b>overheating events</b> (start, end, duration, peak), both downloadable as CSV.</li>
+</ul>
+<figure><img src="screenshots/03_anomalies.png"><figcaption>Figure 3 – Abnormal patterns page</figcaption></figure>
+
+<h3>8.4 Predictive maintenance</h3>
+<ul>
+  <li>The risk rules, written out on the page.</li>
+  <li>A <b>bar chart</b> of how many components are at each risk level.</li>
+  <li>An <b>"Act first on these"</b> list: every Critical and High component, with its server, a plain description of the component, its peak temperature and its projected time to 85 °C.</li>
+  <li>The <b>full risk table</b> (colour-coded risk level, latest, peak and average temperature, readings above 85 °C, % of time above 85 °C, abnormal minutes, trend in °C/day, days to 85 °C), with a CSV download.</li>
+</ul>
+<figure><img src="screenshots/04_risk.png"><figcaption>Figure 4 – Predictive maintenance page</figcaption></figure>
+
+<h3>8.5 Cooling &amp; workload</h3>
+<ul>
+  <li>A <b>two-panel chart</b> for the chosen server: key temperatures on top and fan speeds (rpm) below, on the same time axis. A fan at 0 rpm while temperatures rise points to a cooling problem.</li>
+  <li>A <b>fan summary table</b>: average, minimum and maximum rpm, and the % of time each fan was stopped.</li>
+  <li>A <b>grouped box plot</b> comparing each component's temperature when the server is <b>active</b> (under load) and <b>idle</b>.</li>
+</ul>
+
+
+<h3>8.6 Component guide</h3>
+<p>A reference table explaining what every sensor measures, the colour it uses on every chart, and whether it appears in this dataset.</p>
+
+
+<h2 class="pb">9. Key findings from the data</h2>
+<p>All figures below come from the full run recorded in <code>results/pipeline_log.txt</code> and the tables in <code>results/tables/</code>.</p>
+<h3>9.1 Overall</h3>
+<table>
+  <tr><th>Measure</th><th>Result</th></tr>
+  <tr><td>Servers analysed</td><td>14</td></tr>
+  <tr><td>Server-component combinations monitored</td><td>179</td></tr>
+  <tr><td>Servers with at least one reading above 85 °C</td><td><b>3 of 14</b>: 172.27.28.111, 172.27.186.13, 172.27.186.33</td></tr>
+  <tr><td>Server-components that exceeded 85 °C</td><td>12</td></tr>
+  <tr><td>Overheating events (consecutive readings above 85 °C)</td><td>237</td></tr>
+  <tr><td>Minutes with a reading above 85 °C</td><td>197,882</td></tr>
+  <tr><td>Abnormal minutes detected</td><td>18,590</td></tr>
+  <tr><td>Highest temperature recorded</td><td>127 °C (172.27.28.111, AUXTIN1; see the data-quality note in 9.3)</td></tr>
+  <tr><td>Risk levels (179 server-components)</td><td>Critical 10 · High 2 · Warning 112 · Normal 55 (total 179)</td></tr>
+</table>
+
+<h3>9.2 Components that need attention (Critical and High)</h3>
+<table><tr><th>Level</th><th>Server</th><th>Component</th><th>Latest °C</th><th>Peak °C</th><th>Readings &gt; 85 °C</th><th>% time &gt; 85 °C</th><th>Abnormal min</th><th>Trend °C/day</th><th>Days to 85 °C</th></tr>
+<tr><td class='crit'>CRITICAL</td><td>172.27.28.111</td><td><b>AUXTIN1</b><br><span class='small'>Auxiliary motherboard sensor 1</span></td><td>127.0</td><td>127.0</td><td>14,240</td><td>100.0</td><td>0</td><td>+0.00</td><td>0.0</td></tr>
+<tr><td class='crit'>CRITICAL</td><td>172.27.186.13</td><td><b>AUXTIN2</b><br><span class='small'>Auxiliary motherboard sensor 2</span></td><td>100.0</td><td>103.0</td><td>147,743</td><td>96.3</td><td>151</td><td>+0.28</td><td>0.0</td></tr>
+<tr><td class='crit'>CRITICAL</td><td>172.27.186.13</td><td><b>AUXTIN3</b><br><span class='small'>Auxiliary motherboard sensor 3</span></td><td>101.0</td><td>103.0</td><td>150,679</td><td>98.2</td><td>114</td><td>+0.29</td><td>0.0</td></tr>
+<tr><td class='crit'>CRITICAL</td><td>172.27.186.13</td><td><b>SYSTIN</b><br><span class='small'>System / motherboard ambient temperature</span></td><td>101.0</td><td>103.0</td><td>130,863</td><td>85.3</td><td>128</td><td>+2.21</td><td>0.0</td></tr>
+<tr><td class='crit'>CRITICAL</td><td>172.27.186.13</td><td><b>AUXTIN1</b><br><span class='small'>Auxiliary motherboard sensor 1</span></td><td>91.0</td><td>94.0</td><td>99,120</td><td>64.6</td><td>81</td><td>+0.23</td><td>0.0</td></tr>
+<tr><td class='crit'>CRITICAL</td><td>172.27.186.33</td><td><b>SDR1-RFIC</b><br><span class='small'>RF integrated circuit (radio front-end) on SDR board 1</span></td><td>65.0</td><td>91.0</td><td>1,106</td><td>5.7</td><td>80</td><td>-3.72</td><td>–</td></tr>
+<tr><td class='crit'>CRITICAL</td><td>172.27.28.111</td><td><b>SDR1-RFIC</b><br><span class='small'>RF integrated circuit (radio front-end) on SDR board 1</span></td><td>56.5</td><td>91.0</td><td>4,172</td><td>6.5</td><td>132</td><td>+0.96</td><td>25.3</td></tr>
+<tr><td class='crit'>CRITICAL</td><td>172.27.28.111</td><td><b>SDR1-FPGA</b><br><span class='small'>FPGA chip on software-defined-radio board 1</span></td><td>79.2</td><td>90.2</td><td>4,322</td><td>6.8</td><td>153</td><td>+0.20</td><td>51.4</td></tr>
+<tr><td class='crit'>CRITICAL</td><td>172.27.28.111</td><td><b>SDR0-FPGA</b><br><span class='small'>FPGA chip on software-defined-radio board 0</span></td><td>78.9</td><td>89.8</td><td>4,336</td><td>6.8</td><td>153</td><td>+0.20</td><td>52.5</td></tr>
+<tr><td class='crit'>CRITICAL</td><td>172.27.28.111</td><td><b>SDR0-RFIC</b><br><span class='small'>RF integrated circuit (radio front-end) on SDR board 0</span></td><td>57.0</td><td>88.0</td><td>2,686</td><td>4.2</td><td>131</td><td>+0.86</td><td>28.5</td></tr>
+<tr><td class='high'>HIGH</td><td>172.27.28.111</td><td><b>SDR2-FPGA</b><br><span class='small'>FPGA chip on software-defined-radio board 2</span></td><td>73.3</td><td>88.2</td><td>7</td><td>0.0</td><td>114</td><td>-0.28</td><td>–</td></tr>
+<tr><td class='high'>HIGH</td><td>172.27.28.111</td><td><b>SDR3-FPGA</b><br><span class='small'>FPGA chip on software-defined-radio board 3</span></td><td>72.6</td><td>86.7</td><td>5</td><td>0.0</td><td>118</td><td>-0.25</td><td>–</td></tr>
+</table><p class='small'>“Days to 85 °C” = 0 means the component is already above 85 °C. “–” means no rise towards 85 °C is projected (flat or cooling trend). “Latest °C” is the average of the component's last 30 one-minute values.</p>
+
+<h3>9.3 What the findings mean</h3>
+<ul>
+  <li><b>Server 172.27.186.13 is the most serious case.</b> Its motherboard sensors AUXTIN1–3 and SYSTIN were above 85 °C for 65–98% of all their readings, peaking at 103 °C. Its longest overheating event lasted about <b>10 days</b> (24 March to 3 April 2025). All five of its fan readings show <b>0 rpm for the whole period</b>. Either the fans have failed, or this board does not report fan speed. This should be checked physically, and is the first maintenance action I would recommend.</li>
+  <li><b>Server 172.27.28.111</b> has its SDR boards (SDR0–3, FPGA and RFIC chips) peaking at 87–91 °C. Four of them were above 85 °C for 4–7% of their readings, so its radio boards are running hot under load.</li>
+  <li><b>Data-quality note on 172.27.28.111 AUXTIN1:</b> this sensor reads <b>exactly 127 °C, unchanged, for its entire logged period</b> (28–30 April 2025). A perfectly constant 127 is the highest value an 8-bit temperature sensor can report, and usually means the sensor is faulty or not connected rather than a real temperature. The dashboard still flags it as Critical rather than hiding it, because a real 127 °C cannot be ruled out from the data alone. It should be checked on the hardware.</li>
+  <li><b>Server 172.27.186.33</b> had six short overheating events on its SDR1-RFIC chip (peak 91 °C). It is currently cooling (negative trend), but it overheated for 5.7% of its readings.</li>
+  <li><b>The other 11 servers never exceeded 85 °C.</b> Their hottest components stayed between 63 °C and 83 °C. They do show abnormal minutes. Across all servers, about <b>41%</b> of abnormal minutes (2,599 of 6,279 server-minutes; a server-minute is counted once even when several of its components are abnormal in it, which is why this is smaller than the 18,590 component-minutes) fall within 5 minutes of the server switching between idle and active. The rest are other sudden jumps or drops worth reviewing on the Abnormal patterns page.</li>
+  <li><b>Workload matters:</b> comparing median temperatures, the SDR FPGA chips run about <b>10–12 °C hotter</b>, the SDR RFIC chips about <b>8–29 °C hotter</b> and the CPU about <b>8 °C hotter</b> when servers are active than when idle (readings of exactly 0 °C excluded). This is shown on the Cooling &amp; workload page.</li>
+</ul>
+
+<h2>10. Testing and verification</h2>
+<table>
+  <tr><th style="width:36%">Check</th><th>Result</th></tr>
+  <tr><td>Automatic unit tests (<code>python -m pytest -q</code>)</td><td class="ok">17 passed, 1 warning in 1.24s (all tests passed)</td></tr>
+  <tr><td>What the tests cover</td><td>Server name and column name parsing; header-only files are skipped; "-" is treated as missing; the 85 °C rule is strictly "greater than"; consecutive readings are grouped into one event; the one-minute maximum keeps short spikes; fan and status extraction; the trend slope and days-to-85 °C calculation; no trend projection from less than one day of data; all four risk rules; a sudden jump is flagged as an anomaly; the box-plot numbers match the textbook definition; averaging into larger time blocks never loses the maximum. The tests use a small, hand-written sample file whose correct answers are known in advance. It is labelled as test data in the code.</td></tr>
+  <tr><td>Full pipeline on the real data</td><td class="ok">Completed. Log saved in <code>results/pipeline_log.txt</code></td></tr>
+  <tr><td>Chart export</td><td class="ok">34 interactive HTML charts and 34 PNG images in <code>results/charts/</code></td></tr>
+  <tr><td>Dashboard, all 6 pages, opened in a browser</td><td class="ok">No errors; the screenshots in Section 8 are from this check</td></tr>
+  <tr><td>Dashboard memory use (local measurement)</td><td>About 320 MB after opening every page, which is within Streamlit Community Cloud's documented range of 690 MB–2.7 GB</td></tr>
+  <tr><td>Consistency check</td><td>The dashboard KPI values (14 servers, 179 server-components, 127 °C peak, 197,882 minutes above 85 °C, 18,590 abnormal minutes) match the pipeline output exactly</td></tr>
+</table>
+
+<h2>11. Assumptions, limitations and data-quality notes</h2>
+<h3>Assumptions (my own choices, not given in the brief)</h3>
+<ol>
+  <li>"Exceeding 85 °C" means strictly above 85 °C.</li>
+  <li>The 80–85 °C warning band is an early-warning aid only.</li>
+  <li>The anomaly rule (more than 4 standard deviations from the previous hour) and the risk-level rules (Section 7.4) are reasonable, adjustable settings. They are not taken from any lab standard.</li>
+  <li>The descriptions of the CPUTIN, SYSTIN and AUXTIN sensors are the usual meanings of these motherboard sensor names. The exact board location of AUXTIN0–3 depends on the motherboard.</li>
+</ol>
+<h3>Limitations</h3>
+<ul>
+  <li><b>The prediction is a straight-line trend, not a failure model.</b> It answers "if the recent trend continues, when will this part reach 85 °C?". It cannot predict sudden failures. With no failure records in the data, no claim of prediction accuracy is made.</li>
+  <li><b>The data is historical (a fixed snapshot up to 30 April 2025)</b>, not a live stream. To include new logs, put them in the zip and re-run the pipeline.</li>
+  <li><b>Display resolution:</b> line charts with very many points are drawn from 5-minute (or longer) averages in the dashboard, and the exported per-server charts use 10-minute averages. Each block keeps its maximum, so no spike above 85 °C is hidden. All counts, tables and risk levels are calculated from the full-resolution data.</li>
+  <li><b>Box plots leave out readings of exactly 0 °C</b> (boards switched off). They are kept everywhere else.</li>
+</ul>
+<h3>Data-quality observations (reported, not hidden)</h3>
+<ul>
+  <li>172.27.28.111 AUXTIN1 reads a constant 127 °C, which is probably a sensor fault (see 9.3).</li>
+  <li>Some SDR sensors report exactly 0 °C for long stretches (for example SDR2 on 172.27.29.165 and SDR4 on 172.27.24.74). These are most likely boards that are switched off or disconnected. They are kept as logged and left out of the box plots only. They can lower average temperatures but can never cause a false overheating alert.</li>
+  <li>FAN-6 reads 0 rpm all the time on several servers, which most likely means no fan is connected there. On 172.27.186.13 every fan reads 0 rpm (see 9.3).</li>
+  <li>Server 172.27.186.50 has 11,627 minutes dated March 2023, most likely because of a wrong system clock. These rows are kept as logged.</li>
+</ul>
+
+<h2>12. How to reproduce the results</h2>
+<p>Requirements: Python 3.11 and Windows, macOS or Linux. PNG export also needs Google Chrome or Microsoft Edge installed. Run these from the project folder:</p>
+<pre>git clone https://github.com/KRISHNA2107DK/Server-Temperature-Monitoring-and-Predictive-Maintenance-Dashboard.git
+cd Server-Temperature-Monitoring-and-Predictive-Maintenance-Dashboard
+pip install -r requirements.txt
+python src/pipeline.py          # ~4 minutes: rebuilds data/processed and results/tables
+python src/export_charts.py     # rebuilds results/charts (HTML + PNG)
+python -m pytest -q             # runs the unit tests
+streamlit run src/dashboard.py  # opens the dashboard at http://localhost:8501</pre>
+<p>The pipeline is deterministic: running it again on the same zip file gives exactly the same tables. Library versions used: Python 3.11.9, pandas 3.0.2, plotly 7.1.0, streamlit 1.66.0, pyarrow 26.0.0, kaleido 1.5.0, pytest 9.1.1.</p>
+
+<h2>13. Project files and deliverables</h2>
+<table>
+  <tr><th style="width:36%">Path (in the GitHub repository)</th><th>Contents</th></tr>
+  <tr><td><code>src/pipeline.py</code></td><td>Data loading, cleaning, one-minute summaries, overheating events, anomaly detection, trend, risk levels</td></tr>
+  <tr><td><code>src/charts.py</code></td><td>All chart designs (one place, so the dashboard and exported images look the same)</td></tr>
+  <tr><td><code>src/dashboard.py</code></td><td>The Streamlit dashboard (navigation, filters, six pages, downloads)</td></tr>
+  <tr><td><code>src/export_charts.py</code></td><td>Saves every chart as HTML and PNG</td></tr>
+  <tr><td><code>tests/test_pipeline.py</code></td><td>Unit tests</td></tr>
+  <tr><td><code>results/tables/</code></td><td><code>server_summary.csv</code>, <code>component_risk_summary.csv</code>, <code>critical_breach_events.csv</code>, <code>anomalies.csv</code></td></tr>
+  <tr><td><code>results/charts/</code> and <code>results/charts/png/</code></td><td>34 interactive HTML charts and 34 PNG images (overview charts, plus a trend chart and a cooling chart for each server)</td></tr>
+  <tr><td><code>results/*.txt</code></td><td>Logs of the pipeline run, chart export and test run</td></tr>
+  <tr><td><code>data/processed/</code></td><td>Pre-processed data used by the live dashboard</td></tr>
+  <tr><td><code>SPEC.md</code>, <code>PLAN.md</code>, <code>README.md</code></td><td>Requirements and acceptance criteria, implementation plan, setup instructions</td></tr>
+  <tr><td><code>submission/</code></td><td>This report (PDF and HTML) and the dashboard screenshots</td></tr>
+</table>
+
+<h2>14. Conclusion</h2>
+<p>The project meets every requirement of the problem statement. It is an interactive, publicly hosted dashboard that applies the 85 °C critical threshold to every component of all 14 servers. It presents the data in seven chart types, identifies overheating components and events, shows temperature trends, detects abnormal patterns automatically, and ranks components by maintenance risk using a transparent trend projection.</p>
+<p>On the real data it found that <b>3 of the 14 servers</b> exceeded the critical limit. The most urgent case is <b>172.27.186.13</b>: motherboard sensors at up to 103 °C for most of the logged period, with no fan speed reported. It also found <b>172.27.28.111</b>'s hot SDR radio boards, and a likely faulty sensor reading a constant 127 °C. Every method, assumption and limitation is stated openly in this report, and every result can be reproduced from the public GitHub repository with the commands in Section 12.</p>
+
+</body>
+</html>

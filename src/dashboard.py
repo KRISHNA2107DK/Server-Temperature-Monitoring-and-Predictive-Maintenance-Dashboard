@@ -9,7 +9,7 @@ import pandas as pd
 import streamlit as st
 
 from charts import (CRITICAL_TEMP_C, WARNING_TEMP_C, COMPONENT_GUIDE, COMPONENT_ORDER, COMPONENT_COLORS,
-                    RISK_COLORS, present_components, trend_chart, heatmap_chart, max_temp_bar_chart, distribution_box_chart,
+                    RISK_COLORS, present_components, coarsen_for_display, average_into_blocks, trend_chart, heatmap_chart, max_temp_bar_chart, distribution_box_chart,
                     status_box_chart, anomaly_scatter_chart, risk_level_chart, fan_temperature_chart)
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
@@ -20,10 +20,23 @@ st.set_page_config(page_title="Server Temperature Monitor", page_icon="🌡️",
                    initial_sidebar_state="collapsed")
 
 
-@st.cache_data
+def compact(frame, text_columns, number_columns):
+    """Categories + 32-bit floats cut memory ~3x (261 MB -> 76 MB for the minute table),
+    which keeps the app inside Streamlit Community Cloud's memory limit."""
+    for column in text_columns:
+        frame[column] = frame[column].astype("category")
+    for column in number_columns:
+        frame[column] = frame[column].astype("float32")
+    return frame
+
+
+# cache_resource keeps ONE shared copy in memory (cache_data would hand every rerun its own copy).
+# The pages only read these frames, never modify them.
+@st.cache_resource
 def load_data():
-    minutes = pd.read_parquet(PROCESSED_DIR / "minute_temperatures.parquet")
-    fans = pd.read_parquet(PROCESSED_DIR / "minute_fans.parquet")
+    minutes = compact(pd.read_parquet(PROCESSED_DIR / "minute_temperatures.parquet"),
+                      ["server", "component", "status"], ["temp_mean", "temp_max", "z_score"])
+    fans = compact(pd.read_parquet(PROCESSED_DIR / "minute_fans.parquet"), ["server", "fan"], ["rpm"])
     components = pd.read_csv(TABLES_DIR / "component_risk_summary.csv", parse_dates=["first_seen", "last_seen"])
     servers = pd.read_csv(TABLES_DIR / "server_summary.csv")
     breaches = pd.read_csv(TABLES_DIR / "critical_breach_events.csv", parse_dates=["start", "end"])
@@ -82,12 +95,12 @@ if view.empty:
 def overview_page():
     k1, k2, k3, k4, k5 = st.columns(5)
     k1.metric("Servers", view["server"].nunique(), border=True)
-    k2.metric("Server-components monitored", view.groupby(["server", "component"]).ngroups, border=True)
+    k2.metric("Server-components monitored", view.groupby(["server", "component"], observed=True).ngroups, border=True)
     k3.metric("Peak temperature", f"{view['temp_max'].max():.1f} °C", border=True)
     k4.metric("Minutes above 85 °C", f"{int((view['temp_max'] > CRITICAL_TEMP_C).sum()):,}", border=True)
     k5.metric("Anomalous minutes", f"{int(view['is_anomaly'].sum()):,}", border=True)
 
-    peaks = view.groupby(["server", "component"])["temp_max"].max()
+    peaks = view.groupby(["server", "component"], observed=True)["temp_max"].max()
     hot = peaks[peaks > CRITICAL_TEMP_C].sort_values(ascending=False)
     if hot.empty:
         st.success("No component exceeded 85 °C for the current filters.")
@@ -109,7 +122,9 @@ def trends_page():
     server_view = view[view["server"] == trend_server]
     available = present_components(server_view)
     trend_components = c2.multiselect("Components to plot", available, default=available)
-    show_chart(trend_chart(server_view[server_view["component"].isin(trend_components)], trend_server))
+    chosen = server_view[server_view["component"].isin(trend_components)]
+    chart_data, resolution = coarsen_for_display(chosen, "component")
+    show_chart(trend_chart(chart_data, trend_server, resolution))
     st.caption("Drag the slider under the chart to zoom into a time window · click a legend entry to hide it, "
                "double-click to show only that component.")
     show_chart(distribution_box_chart(view))
@@ -123,7 +138,7 @@ def anomalies_page():
     left, right = st.columns(2)
     with left:
         st.subheader("Anomaly count per server-component")
-        counts = (anomalies.groupby(["server", "component"]).size().reset_index(name="anomaly_minutes")
+        counts = (anomalies.groupby(["server", "component"], observed=True).size().reset_index(name="anomaly_minutes")
                   .sort_values("anomaly_minutes", ascending=False))
         st.dataframe(counts, width="stretch", hide_index=True, height=400)
         download_button(anomalies.round(3), "anomalies.csv", "anomalous minutes")
@@ -136,7 +151,8 @@ def anomalies_page():
 
 def risk_page():
     st.info("**CRITICAL** = last reading > 85 °C or ≥ 1 % of readings above 85 °C · "
-            "**HIGH** = any reading above 85 °C, or the 3-day linear trend reaches 85 °C within 7 days · "
+            "**HIGH** = any reading above 85 °C, or the linear trend of the last 3 days (needs ≥ 1 day of data) "
+            "reaches 85 °C within 7 days · "
             "**WARNING** = peak ≥ 80 °C or any anomaly · **NORMAL** otherwise.")
     left, right = st.columns([1, 2])
     with left:
@@ -166,10 +182,12 @@ def cooling_page():
     fan_server = st.selectbox("Server", sorted(view["server"].unique()), key="fan_server")
     server_fans = fans[(fans["server"] == fan_server)
                        & fans["Timestamp"].between(pd.Timestamp(start_day), pd.Timestamp(end_day) + pd.Timedelta(days=1))]
-    show_chart(fan_temperature_chart(server_fans, view[view["server"] == fan_server], fan_server))
-    fan_table = (server_fans.groupby("fan")["rpm"]
+    temps_chart_data, resolution = coarsen_for_display(view[view["server"] == fan_server], "component")
+    fans_chart_data = average_into_blocks(server_fans, "fan", resolution)  # same time resolution as temperatures
+    show_chart(fan_temperature_chart(fans_chart_data, temps_chart_data, fan_server, resolution))
+    fan_table = (server_fans.groupby("fan", observed=True)["rpm"]
                  .agg(mean_rpm="mean", min_rpm="min", max_rpm="max",
-                      pct_minutes_stopped=lambda s: 100 * (s == 0).mean()).round(1).reset_index())
+                      pct_minutes_stopped=lambda s: 100 * (s == 0).mean()).astype("float64").round(1).reset_index())
     st.subheader(f"Fan summary — {fan_server}")
     st.dataframe(fan_table, width="stretch", hide_index=True)
     show_chart(status_box_chart(view))

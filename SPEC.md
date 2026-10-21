@@ -52,7 +52,7 @@ component is HIGH/CRITICAL in the risk table.
 - A2: Readings resampled to 1-minute mean **and max** (max preserves short spikes) for speed.
 - A3: Values outside −20…150 °C are sensor glitches and excluded.
 - A4: Anomaly = rolling z-score > 4 over previous 60 minutes (std floor 0.5 °C).
-- A5: Risk rules — CRITICAL: last reading > 85 or ≥ 1 % of readings > 85; HIGH: any reading > 85 or trend reaches 85 within 7 days; WARNING: peak ≥ 80 or any anomaly; else NORMAL.
+- A5: Risk rules — CRITICAL: last reading > 85 or ≥ 1 % of readings > 85; HIGH: any reading > 85 or the 3-day trend (only when the data covers ≥ 1 day) reaches 85 within 7 days; WARNING: peak ≥ 80 or any anomaly; else NORMAL.
 - A6: Fan RPM columns are not temperatures and are excluded from the analysis.
 - A7: "Predictive" = transparent linear-trend projection, not an ML model (no labelled failure data exists).
 
