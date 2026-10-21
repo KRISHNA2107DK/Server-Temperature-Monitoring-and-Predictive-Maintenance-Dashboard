@@ -1,0 +1,5 @@
+data/processed/*.tmp
+__pycache__/
+*.pyc
+.claude/
+.pytest_cache/

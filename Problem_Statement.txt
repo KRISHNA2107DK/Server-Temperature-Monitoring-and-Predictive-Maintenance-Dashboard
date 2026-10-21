@@ -1,0 +1,11 @@
+Problem Statement: Server Temperature Monitoring and Predictive Maintenance Dashboard
+
+1.. Background
+
+Temperature readings are collected from multiple servers deployed in a laboratory environment. Each server consists of multiple hardware components, and temperature readings are recorded for each component.
+
+The **critical temperature threshold for any component is 85°C**. Exceeding this threshold may indicate a potential hardware issue and increase the risk of server downtime.
+
+2. Objective
+
+Develop an interactive dashboard to visualize server and component temperature data in multiple graphical formats. The dashboard should help users identify overheating components, monitor temperature trends, detect abnormal patterns, and proactively address potential hardware failures.

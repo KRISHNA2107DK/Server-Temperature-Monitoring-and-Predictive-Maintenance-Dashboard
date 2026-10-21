@@ -1,0 +1,6 @@
+pandas>=2.0
+plotly>=5.18
+streamlit>=1.46
+pyarrow>=14
+kaleido>=1.0
+pytest>=8

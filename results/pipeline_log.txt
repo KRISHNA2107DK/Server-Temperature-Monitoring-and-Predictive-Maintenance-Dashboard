@@ -1,0 +1,7 @@
+Loading CSVs from Tempreture Data.zip
+  1,376,036 raw samples from 14 servers
+  14,234,677 valid component readings, 17 component types
+  servers with any reading > 85 °C: 3 / 14
+  breach events: 237, anomaly minutes: 18590
+  risk levels: {'WARNING': 109, 'NORMAL': 54, 'CRITICAL': 10, 'HIGH': 6}
+Done. Outputs in C:\Users\dharm\Desktop\SIMNOVUS\results
